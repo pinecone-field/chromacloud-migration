@@ -28,6 +28,16 @@ The toolkit moves **one collection** that already has dense embeddings, document
 
 The cutover plan assumes your app pauses writes for the migration window. With writes paused, there are no updates or deletes to replay, so the export is a consistent snapshot and validation can compare the two stores exactly.
 
+## Use it with a coding agent
+
+The repo includes an [Agent Skills](https://agentskills.io) skill, [`skills/chroma-cloud-migration`](skills/chroma-cloud-migration/SKILL.md), that walks a coding agent such as Claude Code, Cursor, or Codex through these steps. It runs each script in order, stops on every failed check, and leaves the write pause and the cutover to you.
+
+```bash
+npx skills add pinecone-field/chromacloud-migration
+```
+
+Then ask your agent to migrate your Chroma Cloud collection to Pinecone.
+
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv/getting-started/installation/). It installs Python 3.13 (pinned in `.python-version`) if you don't have it
@@ -89,7 +99,7 @@ The full sequence:
 4. **Export.** `export.py` fails if the count changes during the export.
 5. **Convert and load** into a fresh, empty namespace.
 6. **Validate.** If a data check fails, stop, fix the cause, and reload into a new namespace (for example `my-collection-v2`). Don't patch gaps with an upsert-only pass: upserts can't remove records deleted in Chroma. If only `app_filters` fails, fix your app's filter instead.
-7. **Decision gate.** This is the last point where rollback is free, because nothing has been written to Pinecone yet.
+7. **Decision gate.** This is the last point where rollback is free. The data is in Pinecone, but your app hasn't read from it or written to it yet.
 8. **Flip reads and writes together**, then resume writes.
 9. **Monitor** errors, latency, and result quality. From here, rolling back means replaying Pinecone writes into Chroma.
 10. **Retire Chroma Cloud** before December 22. Remove Chroma client code, rotate or delete Chroma Cloud credentials, and archive `export.jsonl` with `field_map.json`, `id_map.jsonl`, and `transforms.jsonl`. You need all four files to reverse renames and ID mappings.
@@ -132,7 +142,7 @@ with open("golden.jsonl", "w") as f:
 | `documents` | A `text` field on the document |
 | `metadatas` | Top-level document fields, filterable automatically |
 | Distance `l2` (default) / `cosine` / `ip` | Metric `euclidean` / `cosine` / `dotproduct` |
-| `where` filter | `filter` with `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$exists`, `$and`, `$or`, `$not` |
+| `where` filter | `filter` with `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$and`, `$or`. `$exists` and `$not` exist in Pinecone but aren't translated by the toolkit; rewrite those by hand |
 | `$contains` / `$not_contains` on an array key | `{"$in": [value]}` / `{"$nin": [value]}` |
 | `$contains` / `$not_contains` on a non-array key, `where_document` | No equivalent. Redesign these queries |
 
